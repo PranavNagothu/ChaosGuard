@@ -1,0 +1,74 @@
+name: ChaosGuard CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify module consistency
+        run: go mod verify
+
+      - name: Build server
+        run: go build -v ./cmd/server
+
+      - name: Build agent
+        run: go build -v ./cmd/agent
+
+      - name: Run unit tests with race detector
+        run: go test -v -race -count=1 ./...
+
+      - name: Run benchmarks (smoke test only)
+        run: go test -bench=. -benchtime=1s -benchmem ./internal/policy/...
+
+      - name: Generate coverage report
+        run: go test -coverprofile=coverage.out ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.out
+          fail_ci_if_error: false
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  docker:
+    name: Docker Build Smoke Test
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build server image
+        run: docker build -f Dockerfile.server -t chaosguard-server:ci .
+      - name: Build agent image
+        run: docker build -f Dockerfile.agent -t chaosguard-agent:ci .

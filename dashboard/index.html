@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChaosGuard — Control Plane</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0e1a;
+      --surface:   #111827;
+      --surface2:  #1a2235;
+      --border:    rgba(255,255,255,0.07);
+      --accent:    #6366f1;
+      --accent2:   #8b5cf6;
+      --green:     #10b981;
+      --red:       #ef4444;
+      --yellow:    #f59e0b;
+      --blue:      #3b82f6;
+      --text:      #f1f5f9;
+      --muted:     #64748b;
+      --glow:      rgba(99,102,241,0.15);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated background ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 10%, rgba(99,102,241,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(139,92,246,0.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Layout ── */
+    .wrapper { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 32px; padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 0 20px rgba(99,102,241,0.4);
+    }
+    .logo-text h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+    .logo-text p  { font-size: 0.75rem; color: var(--muted); }
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 20px;
+      background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2);
+      font-size: 0.75rem; color: var(--green); font-weight: 500;
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green);
+      animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+
+    /* ── Stat cards ── */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+    @media(max-width:900px){ .stats{ grid-template-columns: repeat(2,1fr); } }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 24px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .card:hover { border-color: rgba(99,102,241,0.3); box-shadow: 0 0 20px var(--glow); }
+
+    .stat-card { position: relative; overflow: hidden; }
+    .stat-card::after {
+      content: '';
+      position: absolute; top: -30px; right: -20px;
+      width: 80px; height: 80px; border-radius: 50%;
+      background: var(--accent-bg, rgba(99,102,241,0.08));
+      filter: blur(20px);
+    }
+    .stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    .stat-value { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+    .stat-sub   { font-size: 0.75rem; color: var(--muted); margin-top: 6px; }
+    .stat-icon  { font-size: 1.4rem; margin-bottom: 6px; }
+
+    /* ── Main grid ── */
+    .main-grid { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
+    @media(max-width:1100px){ .main-grid{ grid-template-columns: 1fr; } }
+
+    /* ── Section headers ── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+    .section-badge {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+      background: rgba(99,102,241,0.15); color: var(--accent); font-weight: 600;
+    }
+
+    /* ── Policies ── */
+    .policy-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 10px;
+      transition: all 0.2s;
+      cursor: default;
+    }
+    .policy-card:hover { border-color: rgba(99,102,241,0.3); transform: translateY(-1px); }
+    .policy-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .policy-name { font-size: 0.88rem; font-weight: 600; }
+    .policy-service {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 6px;
+      background: rgba(99,102,241,0.12); color: var(--accent); font-family: 'JetBrains Mono', monospace;
+    }
+
+    .fault-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .fault-chip {
+      font-size: 0.68rem; padding: 3px 8px; border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace; font-weight: 500;
+    }
+    .fault-latency  { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.2); }
+    .fault-error    { background: rgba(239,68,68,0.12);  color: var(--red);    border: 1px solid rgba(239,68,68,0.2); }
+    .fault-partition{ background: rgba(59,130,246,0.12); color: var(--blue);   border: 1px solid rgba(59,130,246,0.2); }
+    .fault-timeout  { background: rgba(139,92,246,0.12); color: var(--accent2);border: 1px solid rgba(139,92,246,0.2); }
+
+    .policy-meta { display: flex; align-items: center; justify-content: space-between; }
+    .policy-meta-item { font-size: 0.7rem; color: var(--muted); }
+    .policy-meta-item span { color: var(--text); font-weight: 500; }
+
+    .kill-btn {
+      padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(239,68,68,0.3);
+      background: rgba(239,68,68,0.1); color: var(--red);
+      font-size: 0.7rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .kill-btn:hover { background: rgba(239,68,68,0.2); border-color: var(--red); }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .empty-state .emoji { font-size: 2.5rem; margin-bottom: 10px; }
+    .empty-state p { font-size: 0.85rem; }
+
+    /* ── Live request log ── */
+    .log-container {
+      height: 220px; overflow-y: auto; border-radius: 10px;
+      background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+      padding: 10px;
+    }
+    .log-container::-webkit-scrollbar { width: 4px; }
+    .log-container::-webkit-scrollbar-track { background: transparent; }
+    .log-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    .log-entry {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.71rem; padding: 3px 0;
+      display: flex; gap: 8px; align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+    .log-time { color: var(--muted); min-width: 55px; }
+    .log-status-200 { color: var(--green); min-width: 30px; }
+    .log-status-503 { color: var(--red);   min-width: 30px; }
+    .log-status-502 { color: var(--yellow);min-width: 30px; }
+    .log-chaos { color: var(--accent); font-size: 0.65rem; padding: 1px 4px; background: rgba(99,102,241,0.12); border-radius: 3px; }
+
+    /* ── Inject panel ── */
+    .inject-panel { display: flex; flex-direction: column; gap: 16px; }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .form-input, .form-select {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 9px 12px;
+      color: var(--text); font-size: 0.82rem; font-family: 'Inter', sans-serif;
+      outline: none; transition: border-color 0.2s;
+      width: 100%;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--accent); }
+    .form-select option { background: var(--surface2); }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .range-row { display: flex; align-items: center; justify-content: space-between; }
+    .range-val { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--accent); min-width: 45px; text-align: right; }
+    input[type=range] {
+      -webkit-appearance: none; width: 100%; height: 4px;
+      background: var(--surface2); border-radius: 2px; outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+      background: var(--accent); cursor: pointer;
+      box-shadow: 0 0 8px rgba(99,102,241,0.5);
+    }
+
+    .btn {
+      padding: 10px 18px; border-radius: 10px; border: none;
+      font-size: 0.83rem; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white; width: 100%;
+      box-shadow: 0 4px 15px rgba(99,102,241,0.3);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,0.45); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-danger { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); width: 100%; }
+    .btn-danger:hover { background: rgba(239,68,68,0.25); }
+    .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* ── Audit log ── */
+    .audit-entry {
+      padding: 10px 12px; border-radius: 8px;
+      background: var(--surface2); border: 1px solid var(--border);
+      margin-bottom: 8px; font-size: 0.75rem;
+    }
+    .audit-type { font-weight: 600; margin-bottom: 2px; }
+    .audit-type.created  { color: var(--green); }
+    .audit-type.disabled { color: var(--yellow); }
+    .audit-type.kill     { color: var(--red); }
+    .audit-time { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; }
+
+    /* ── Metrics bar ── */
+    .metrics-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .metric-box {
+      flex: 1; min-width: 100px;
+      padding: 12px; border-radius: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      text-align: center;
+    }
+    .metric-val { font-size: 1.3rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .metric-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 12px 20px; border-radius: 12px;
+      font-size: 0.82rem; font-weight: 500;
+      background: var(--surface2); border: 1px solid var(--border);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      display: none; z-index: 999;
+      animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    #toast.success { border-color: rgba(16,185,129,0.4); color: var(--green); }
+    #toast.error   { border-color: rgba(239,68,68,0.4);  color: var(--red);   }
+
+    .spinner {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: white;
+      animation: spin 0.6s linear infinite; display: none;
+    }
+    @keyframes spin { to{ transform: rotate(360deg); } }
+
+    .divider { height: 1px; background: var(--border); margin: 4px 0; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-text">
+        <h1>ChaosGuard</h1>
+        <p>Fault Injection Control Plane</p>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <div id="status-pill" class="status-pill">
+        <div class="status-dot"></div>
+        <span id="status-text">Connecting…</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Stat Cards -->
+  <div class="stats">
+    <div class="card stat-card" style="--accent-bg:rgba(99,102,241,0.1)">
+      <div class="stat-icon">📋</div>
+      <div class="stat-label">Active Policies</div>
+      <div class="stat-value" id="stat-policies">—</div>
+      <div class="stat-sub">currently enabled</div>
+    </div>
+    <div class="card stat-card" style="--accent-bg:rgba(239,68,68,0.08)">
+      <div class="stat-icon">💥</div>
+      <div class="stat-label">Injections (session)</div>
+      <div class="stat-value" id="stat-injections" style="color:var(--red)">0</div>
+      <div class="stat-sub">faults fired</div>
+    </div>
+    <div class="card stat-card" style="--accent-bg:rgba(16,185,129,0.08)">
+      <div class="stat-icon">📡</div>
+      <div class="stat-label">Requests Tracked</div>
+      <div class="stat-value" id="stat-requests" style="color:var(--green)">0</div>
+      <div class="stat-sub">through proxy</div>
+    </div>
+    <div class="card stat-card" style="--accent-bg:rgba(245,158,11,0.08)">
+      <div class="stat-icon">⏱️</div>
+      <div class="stat-label">Avg Latency</div>
+      <div class="stat-value" id="stat-latency" style="color:var(--yellow)">—</div>
+      <div class="stat-sub">last 60s (p50)</div>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main-grid">
+
+    <!-- LEFT: Policies + Live Log -->
+    <div>
+
+      <!-- Active Policies -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="section-header">
+          <span class="section-title">🛡️ Active Policies</span>
+          <span class="section-badge" id="policy-count">0</span>
+        </div>
+        <div id="policies-list">
+          <div class="empty-state">
+            <div class="emoji">🔇</div>
+            <p>No active policies. Use the panel →<br>to inject your first fault.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Proxy Request Log -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="section-header">
+          <span class="section-title">📊 Live Request Simulation</span>
+          <button class="btn" onclick="toggleSimulation()" id="sim-btn"
+            style="padding:4px 12px;font-size:0.72rem;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px">
+            ▶ Start
+          </button>
+        </div>
+        <div class="log-container" id="live-log">
+          <div style="color:var(--muted);font-size:0.75rem;text-align:center;padding:20px">
+            Click "Start" to simulate proxy traffic and watch chaos in action
+          </div>
+        </div>
+        <div class="metrics-row" style="margin-top:12px">
+          <div class="metric-box">
+            <div class="metric-val" id="m-total">0</div>
+            <div class="metric-label">Total Reqs</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val" id="m-chaos" style="color:var(--red)">0</div>
+            <div class="metric-label">Chaos Hits</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val" id="m-rate" style="color:var(--accent)">0%</div>
+            <div class="metric-label">Injection Rate</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val" id="m-avg" style="color:var(--yellow)">0ms</div>
+            <div class="metric-label">Avg Latency</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audit Log -->
+      <div class="card">
+        <div class="section-header">
+          <span class="section-title">📜 Audit Log</span>
+          <button onclick="loadAudit()" style="font-size:0.7rem;color:var(--accent);background:none;border:none;cursor:pointer">↻ Refresh</button>
+        </div>
+        <div id="audit-list">
+          <div class="empty-state"><p>No audit events yet</p></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Inject Panel -->
+    <div>
+      <div class="card inject-panel" style="position:sticky;top:24px">
+        <div class="section-header">
+          <span class="section-title">⚡ Inject Chaos</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Service ID</label>
+          <input id="f-service" class="form-input" value="echo-service" placeholder="echo-service" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Policy Name</label>
+          <input id="f-name" class="form-input" value="latency-test" placeholder="my-chaos-policy" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Fault Type</label>
+          <select id="f-type" class="form-select" onchange="updateFaultUI()">
+            <option value="latency">⏱ Latency Injection</option>
+            <option value="error">💥 Error Injection</option>
+            <option value="partition">🔌 Network Partition</option>
+            <option value="timeout">⏳ Timeout</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Probability</label>
+          <div class="range-row">
+            <input type="range" id="f-prob" min="0" max="100" value="40" oninput="document.getElementById('prob-val').textContent=this.value+'%'" />
+            <span class="range-val" id="prob-val">40%</span>
+          </div>
+        </div>
+
+        <div id="latency-opts" class="form-group">
+          <label class="form-label">Delay Range</label>
+          <div class="row">
+            <div>
+              <label class="form-label" style="margin-bottom:4px">Min (ms)</label>
+              <input id="f-min" class="form-input" type="number" value="200" min="0" />
+            </div>
+            <div>
+              <label class="form-label" style="margin-bottom:4px">Max (ms)</label>
+              <input id="f-max" class="form-input" type="number" value="800" min="0" />
+            </div>
+          </div>
+          <select id="f-dist" class="form-select" style="margin-top:8px">
+            <option value="normal">Normal distribution</option>
+            <option value="uniform">Uniform distribution</option>
+            <option value="exponential">Exponential distribution</option>
+          </select>
+        </div>
+
+        <div id="error-opts" class="form-group" style="display:none">
+          <label class="form-label">HTTP Status Code</label>
+          <select id="f-status" class="form-select">
+            <option value="503">503 Service Unavailable</option>
+            <option value="500">500 Internal Server Error</option>
+            <option value="429">429 Too Many Requests</option>
+            <option value="502">502 Bad Gateway</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Blast Radius</label>
+          <div class="range-row">
+            <input type="range" id="f-blast" min="0" max="100" value="50" oninput="document.getElementById('blast-val').textContent=this.value+'%'" />
+            <span class="range-val" id="blast-val">50%</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Auto-Expire (TTL)</label>
+          <select id="f-ttl" class="form-select">
+            <option value="5m">5 minutes</option>
+            <option value="10m" selected>10 minutes</option>
+            <option value="30m">30 minutes</option>
+            <option value="1h">1 hour</option>
+            <option value="">No expiry</option>
+          </select>
+        </div>
+
+        <div style="display:flex;gap:8px">
+          <span class="spinner" id="inject-spinner"></span>
+        </div>
+
+        <button class="btn btn-primary" id="inject-btn" onclick="injectChaos()">
+          ⚡ Inject Chaos
+        </button>
+
+        <div class="divider"></div>
+
+        <button class="btn btn-danger" id="kill-btn" onclick="killSwitch()">
+          🛑 Emergency Kill Switch
+        </button>
+        <div style="font-size:0.68rem;color:var(--muted);text-align:center">
+          Immediately disables all chaos for the service
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const API = '';  // relative — served from the same origin
+  let simInterval = null;
+  let simRunning  = false;
+  let simTotal    = 0;
+  let simChaos    = 0;
+  let simLatTotal = 0;
+  let sessionInjections = 0;
+  let sessionRequests   = 0;
+
+  // ── Toast ──────────────────────────────────────────────────────
+  function toast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = type;
+    t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 3000);
+  }
+
+  // ── Status ─────────────────────────────────────────────────────
+  async function checkHealth() {
+    try {
+      const r = await fetch(API + '/healthz');
+      const data = await r.json();
+      if (data.status === 'ok') {
+        document.getElementById('status-text').textContent = 'Connected';
+        document.getElementById('status-pill').style.borderColor = 'rgba(16,185,129,0.3)';
+      }
+    } catch {
+      document.getElementById('status-text').textContent = 'Disconnected';
+      document.getElementById('status-pill').style.background = 'rgba(239,68,68,0.1)';
+      document.getElementById('status-pill').style.borderColor = 'rgba(239,68,68,0.3)';
+      document.getElementById('status-pill').style.color = 'var(--red)';
+      document.querySelector('.status-dot').style.background = 'var(--red)';
+    }
+  }
+
+  // ── Load Policies ──────────────────────────────────────────────
+  async function loadPolicies() {
+    const svc = document.getElementById('f-service').value || 'echo-service';
+    try {
+      const r = await fetch(API + '/api/v1/policies?service_id=' + encodeURIComponent(svc));
+      const data = await r.json();
+      const policies = data.policies || [];
+      document.getElementById('policy-count').textContent = policies.length;
+      document.getElementById('stat-policies').textContent = policies.length;
+
+      const list = document.getElementById('policies-list');
+      if (policies.length === 0) {
+        list.innerHTML = `<div class="empty-state"><div class="emoji">🔇</div><p>No active policies.<br>Use the panel → to inject your first fault.</p></div>`;
+        return;
+      }
+
+      list.innerHTML = policies.map(p => {
+        const faults = p.spec.faults || [];
+        const chips = faults.map(f => {
+          const cls = 'fault-' + f.type;
+          const label = f.type === 'latency'
+            ? `latency ${Math.round(f.probability*100)}% · ${f.config.min_delay_ms}-${f.config.max_delay_ms}ms`
+            : f.type === 'error'
+            ? `error ${Math.round(f.probability*100)}% · ${f.config.status_code}`
+            : `${f.type} ${Math.round(f.probability*100)}%`;
+          return `<span class="fault-chip ${cls}">${label}</span>`;
+        }).join('');
+
+        const expires = p.expires_at ? new Date(p.expires_at).toLocaleTimeString() : 'Never';
+        const blast   = p.spec.safeguards?.blast_radius != null ? (p.spec.safeguards.blast_radius * 100) + '%' : '—';
+
+        return `
+          <div class="policy-card">
+            <div class="policy-header">
+              <span class="policy-name">${p.name}</span>
+              <span class="policy-service">${p.service_id}</span>
+            </div>
+            <div class="fault-chips">${chips}</div>
+            <div class="policy-meta">
+              <span class="policy-meta-item">Expires <span>${expires}</span></span>
+              <span class="policy-meta-item">Blast radius <span>${blast}</span></span>
+              <button class="kill-btn" onclick="disablePolicy('${p.id}')">✕ Disable</button>
+            </div>
+          </div>`;
+      }).join('');
+    } catch(e) {}
+  }
+
+  // ── Disable single policy ──────────────────────────────────────
+  async function disablePolicy(id) {
+    try {
+      await fetch(API + '/api/v1/policies/' + id, { method: 'DELETE' });
+      toast('Policy disabled ✓');
+      loadPolicies();
+      loadAudit();
+    } catch { toast('Failed to disable', 'error'); }
+  }
+
+  // ── Kill switch ────────────────────────────────────────────────
+  async function killSwitch() {
+    const svc = document.getElementById('f-service').value || 'echo-service';
+    const btn = document.getElementById('kill-btn');
+    btn.disabled = true;
+    btn.textContent = '🛑 Killing…';
+    try {
+      const r = await fetch(API + '/api/v1/services/' + encodeURIComponent(svc) + '/kill', { method: 'POST' });
+      const data = await r.json();
+      toast(`Kill switch: ${data.policies_disabled} policies disabled ✓`);
+      loadPolicies();
+      loadAudit();
+    } catch { toast('Kill switch failed', 'error'); }
+    btn.disabled = false;
+    btn.textContent = '🛑 Emergency Kill Switch';
+  }
+
+  // ── Inject chaos ───────────────────────────────────────────────
+  function updateFaultUI() {
+    const type = document.getElementById('f-type').value;
+    document.getElementById('latency-opts').style.display = type === 'latency' ? '' : 'none';
+    document.getElementById('error-opts').style.display   = type === 'error'   ? '' : 'none';
+  }
+
+  async function injectChaos() {
+    const btn = document.getElementById('inject-btn');
+    const spinner = document.getElementById('inject-spinner');
+    btn.disabled = true;
+    spinner.style.display = 'inline-block';
+
+    const type  = document.getElementById('f-type').value;
+    const prob  = parseInt(document.getElementById('f-prob').value) / 100;
+    const blast = parseInt(document.getElementById('f-blast').value) / 100;
+    const ttl   = document.getElementById('f-ttl').value;
+
+    let faultConfig = {};
+    if (type === 'latency') {
+      faultConfig = {
+        min_delay_ms: parseInt(document.getElementById('f-min').value),
+        max_delay_ms: parseInt(document.getElementById('f-max').value),
+        distribution: document.getElementById('f-dist').value
+      };
+    } else if (type === 'error') {
+      faultConfig = {
+        status_code: parseInt(document.getElementById('f-status').value),
+        body: JSON.stringify({ error: 'Chaos injected by ChaosGuard' })
+      };
+    }
+
+    const payload = {
+      name:       document.getElementById('f-name').value || 'dashboard-policy',
+      service_id: document.getElementById('f-service').value || 'echo-service',
+      ttl:        ttl || undefined,
+      spec: {
+        target: { service: document.getElementById('f-service').value || 'echo-service' },
+        faults: [{ type, probability: prob, config: faultConfig }],
+        safeguards: { blast_radius: blast, kill_switch: true, max_duration: ttl || '30m' }
+      }
+    };
+
+    try {
+      const r = await fetch(API + '/api/v1/policies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (r.ok) {
+        toast('✓ Chaos policy activated!');
+        loadPolicies();
+        loadAudit();
+      } else {
+        const err = await r.json();
+        toast('Error: ' + err.error, 'error');
+      }
+    } catch(e) { toast('Failed to connect to API', 'error'); }
+
+    btn.disabled = false;
+    spinner.style.display = 'none';
+  }
+
+  // ── Audit log ──────────────────────────────────────────────────
+  async function loadAudit() {
+    const svc = document.getElementById('f-service').value || 'echo-service';
+    try {
+      const r = await fetch(API + '/api/v1/audit?service_id=' + encodeURIComponent(svc) + '&limit=10');
+      const data = await r.json();
+      const events = data.events || [];
+      const list = document.getElementById('audit-list');
+      if (!events.length) {
+        list.innerHTML = '<div class="empty-state"><p>No audit events yet</p></div>';
+        return;
+      }
+      list.innerHTML = events.map(e => {
+        const cls = e.type.includes('created') ? 'created' : e.type.includes('kill') ? 'kill' : 'disabled';
+        const icons = { created:'✅',disabled:'⚠️',kill:'🛑' };
+        return `<div class="audit-entry">
+          <div class="audit-type ${cls}">${icons[cls]||'•'} ${e.type}</div>
+          <div class="audit-time">${new Date(e.created_at).toLocaleTimeString()} · actor: ${e.actor || 'anon'} · policy: ${e.policy_id||'—'}</div>
+        </div>`;
+      }).join('');
+    } catch {}
+  }
+
+  // ── Live simulation ────────────────────────────────────────────
+  function toggleSimulation() {
+    const btn = document.getElementById('sim-btn');
+    if (simRunning) {
+      clearInterval(simInterval);
+      simRunning = false;
+      btn.textContent = '▶ Start';
+    } else {
+      const svc = document.getElementById('f-service').value || 'echo-service';
+      simRunning = true;
+      btn.textContent = '⏸ Pause';
+      const log = document.getElementById('live-log');
+      log.innerHTML = '';
+
+      simInterval = setInterval(async () => {
+        try {
+          // Fetch current policies to see what chaos is active
+          const r   = await fetch(API + '/api/v1/policies?service_id=' + encodeURIComponent(svc));
+          const d   = await r.json();
+          const policies = d.policies || [];
+
+          // Simulate a request evaluation client-side for visualization
+          let chaosHit = false;
+          let delayMs  = 2;
+          let status   = 200;
+          let chaosType = '';
+
+          for (const p of policies) {
+            if (!p.enabled) continue;
+            const br = p.spec.safeguards?.blast_radius || 1.0;
+            if (Math.random() > br) continue;
+            for (const f of (p.spec.faults || [])) {
+              if (Math.random() < f.probability) {
+                chaosHit = true;
+                if (f.type === 'latency') {
+                  const min = f.config.min_delay_ms || 100;
+                  const max = f.config.max_delay_ms || 500;
+                  delayMs = Math.floor(min + Math.random() * (max - min));
+                  chaosType = 'latency';
+                } else if (f.type === 'error') {
+                  status = f.config.status_code || 503;
+                  chaosType = 'error';
+                }
+              }
+            }
+          }
+
+          simTotal++;
+          sessionRequests++;
+          if (chaosHit) { simChaos++; sessionInjections++; }
+          simLatTotal += delayMs;
+
+          // Update metric boxes
+          document.getElementById('m-total').textContent = simTotal;
+          document.getElementById('m-chaos').textContent = simChaos;
+          document.getElementById('m-rate').textContent  = Math.round(simChaos / simTotal * 100) + '%';
+          document.getElementById('m-avg').textContent   = Math.round(simLatTotal / simTotal) + 'ms';
+          document.getElementById('stat-requests').textContent  = sessionRequests;
+          document.getElementById('stat-injections').textContent = sessionInjections;
+          if (delayMs > 10) document.getElementById('stat-latency').textContent = delayMs + 'ms';
+
+          // Add log entry
+          const now = new Date().toLocaleTimeString('en', { hour12:false });
+          const statusClass = status >= 500 ? 'log-status-503' : 'log-status-200';
+          const entry = document.createElement('div');
+          entry.className = 'log-entry';
+          entry.innerHTML = `
+            <span class="log-time">${now}</span>
+            <span class="${statusClass}">${status}</span>
+            <span style="color:var(--muted);flex:1">GET /  ${delayMs}ms</span>
+            ${chaosHit ? `<span class="log-chaos">${chaosType||'chaos'}</span>` : ''}
+          `;
+          log.insertBefore(entry, log.firstChild);
+          // Keep max 50 entries
+          while (log.children.length > 50) log.removeChild(log.lastChild);
+
+        } catch {}
+      }, 600);
+    }
+  }
+
+  // ── Polling loop ───────────────────────────────────────────────
+  function startPolling() {
+    checkHealth();
+    loadPolicies();
+    loadAudit();
+    setInterval(() => { checkHealth(); loadPolicies(); }, 5000);
+    setInterval(() => loadAudit(), 10000);
+  }
+
+  updateFaultUI();
+  startPolling();
+</script>
+</body>
+</html>

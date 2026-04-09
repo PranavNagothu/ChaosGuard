@@ -1,0 +1,24 @@
+{
+  "name": "network-partition-test",
+  "service_id": "echo-service",
+  "ttl": "5m",
+  "spec": {
+    "target": {
+      "service": "echo-service",
+      "endpoints": ["/api/checkout"],
+      "methods": ["POST"]
+    },
+    "faults": [
+      {
+        "type": "partition",
+        "probability": 0.1,
+        "config": {}
+      }
+    ],
+    "safeguards": {
+      "max_duration": "5m",
+      "blast_radius": 0.1,
+      "kill_switch": true
+    }
+  }
+}

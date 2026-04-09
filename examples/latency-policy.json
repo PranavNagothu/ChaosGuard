@@ -1,0 +1,36 @@
+{
+  "name": "checkout-latency-test",
+  "service_id": "echo-service",
+  "ttl": "10m",
+  "spec": {
+    "target": {
+      "service": "echo-service",
+      "endpoints": [],
+      "methods": ["GET", "POST"]
+    },
+    "faults": [
+      {
+        "type": "latency",
+        "probability": 0.4,
+        "config": {
+          "min_delay_ms": 200,
+          "max_delay_ms": 800,
+          "distribution": "normal"
+        }
+      },
+      {
+        "type": "error",
+        "probability": 0.05,
+        "config": {
+          "status_code": 503,
+          "body": "{\"error\": \"Service temporarily unavailable\", \"injected_by\": \"ChaosGuard\"}"
+        }
+      }
+    ],
+    "safeguards": {
+      "max_duration": "10m",
+      "blast_radius": 0.5,
+      "kill_switch": true
+    }
+  }
+}

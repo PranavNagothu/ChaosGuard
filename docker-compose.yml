@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: chaosguard-postgres
+    environment:
+      POSTGRES_USER: chaosguard
+      POSTGRES_PASSWORD: chaosguard
+      POSTGRES_DB: chaosguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chaosguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: chaosguard-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: chaosguard-server
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://chaosguard:chaosguard@postgres:5432/chaosguard?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      LISTEN_ADDR: ":8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Example downstream service (echo server for testing)
+  echo-service:
+    image: hashicorp/http-echo:latest
+    container_name: chaosguard-echo
+    command: ["-text=Hello from echo-service", "-listen=:9090"]
+    ports:
+      - "9090:9090"
+
+  # Proxy agent sitting in front of echo-service
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: chaosguard-agent
+    ports:
+      - "8181:8181"
+    environment:
+      CONTROL_PLANE_URL: http://server:8080
+      REDIS_URL: redis://redis:6379
+      SERVICE_ID: echo-service
+      UPSTREAM_URL: http://echo-service:9090
+      LISTEN_ADDR: ":8181"
+    depends_on:
+      - server
+      - redis
+      - echo-service
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: chaosguard-prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - server
+      - agent
+
+volumes:
+  postgres_data:
