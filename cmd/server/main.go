@@ -23,10 +23,20 @@ func main() {
 	log.Println("🚀 Starting ChaosGuard Control Plane...")
 
 	// ─── Database ────────────────────────────────────────────────────────────
-	db, err := store.NewPostgres(envOrDefault("DATABASE_URL",
-		"postgres://chaosguard:chaosguard@localhost:5432/chaosguard?sslmode=disable"))
+	// Retry DB connection — cloud providers start the app before the DB is ready
+	var db *store.Postgres
+	var err error
+	for i := 0; i < 10; i++ {
+		db, err = store.NewPostgres(envOrDefault("DATABASE_URL",
+			"postgres://chaosguard:chaosguard@localhost:5432/chaosguard?sslmode=disable"))
+		if err == nil {
+			break
+		}
+		log.Printf("DB not ready (attempt %d/10): %v — retrying in 5s", i+1, err)
+		time.Sleep(5 * time.Second)
+	}
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		log.Fatalf("failed to connect to database after retries: %v", err)
 	}
 	defer db.Close()
 
@@ -55,8 +65,16 @@ func main() {
 	router.Handle("/dashboard/", http.StripPrefix("/dashboard/", dashboardFS))
 
 
+	// Railway injects PORT as a plain number (e.g. "8080"), not ":8080"
+	listenAddr := os.Getenv("PORT")
+	if listenAddr != "" {
+		listenAddr = ":" + listenAddr
+	} else {
+		listenAddr = envOrDefault("LISTEN_ADDR", ":8080")
+	}
+
 	srv := &http.Server{
-		Addr:         envOrDefault("LISTEN_ADDR", ":8080"),
+		Addr:         listenAddr,
 		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
